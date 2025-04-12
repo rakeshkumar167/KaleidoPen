@@ -451,7 +451,7 @@ function App() {
                 <div className="relative">
                   <button
                     onClick={() => setShowColorPicker(!showColorPicker)}
-                    className="w-6 h-6 rounded border border-gray-300"
+                    className="w-8 h-8 rounded border border-gray-300"
                     style={{ backgroundColor: color }}
                   />
                   {showColorPicker && (
@@ -487,40 +487,40 @@ function App() {
                 <button
                   onClick={undo}
                   disabled={currentStep <= 0}
-                  className={`flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 rounded ${
+                  className={`p-2 rounded-full transition-colors ${
                     currentStep <= 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-500 text-white hover:bg-gray-600'
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
+                  title="Undo"
                 >
-                  <Undo2 size={16} className="sm:w-5 sm:h-5" />
-                  <span>Undo</span>
+                  <Undo2 size={20} />
                 </button>
                 <button
                   onClick={redo}
                   disabled={currentStep >= history.length - 1}
-                  className={`flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 rounded ${
+                  className={`p-2 rounded-full transition-colors ${
                     currentStep >= history.length - 1
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-500 text-white hover:bg-gray-600'
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
+                  title="Redo"
                 >
-                  <Redo2 size={16} className="sm:w-5 sm:h-5" />
-                  <span>Redo</span>
+                  <Redo2 size={20} />
                 </button>
                 <button
                   onClick={clearCanvas}
-                  className="flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                  title="Clear canvas"
                 >
-                  <Eraser size={16} className="sm:w-5 sm:h-5" />
-                  <span>Clear</span>
+                  <Eraser size={20} />
                 </button>
                 <button
                   onClick={downloadCanvas}
-                  className="flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                  className="p-2 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors"
+                  title="Save drawing"
                 >
-                  <Download size={16} className="sm:w-5 sm:h-5" />
-                  <span>Save</span>
+                  <Download size={20} />
                 </button>
               </div>
             </div>
