@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Eraser, Download, Minus, Plus } from 'lucide-react';
+import { Eraser, Download, Minus, Plus, Undo2, Redo2 } from 'lucide-react';
 
 type Layout = {
   type: 'radial' | 'kaleidoscope' | 'vertical' | 'horizontal';
@@ -10,8 +10,8 @@ type Layout = {
 const LAYOUTS: Layout[] = [
   { type: 'radial', segments: 8, label: 'Radial 8' },
   { type: 'radial', segments: 12, label: 'Radial 12' },
-  { type: 'kaleidoscope', segments: 8, label: 'Kaleidoscope 8' },
-  { type: 'kaleidoscope', segments: 12, label: 'Kaleidoscope 12' },
+  { type: 'kaleidoscope', segments: 6, label: 'Hexagon 6' },
+  { type: 'kaleidoscope', segments: 12, label: 'Hexagon 12' },
   { type: 'vertical', segments: 1, label: 'Vertical' },
   { type: 'horizontal', segments: 1, label: 'Horizontal' },
 ];
@@ -36,6 +36,47 @@ function App() {
   const [lastX, setLastX] = useState(0);
   const [lastY, setLastY] = useState(0);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+  const [currentStep, setCurrentStep] = useState(-1);
+
+  const saveToHistory = () => {
+    if (!canvasRef.current) return;
+    
+    const newHistory = history.slice(0, currentStep + 1);
+    newHistory.push(canvasRef.current.toDataURL());
+    setHistory(newHistory);
+    setCurrentStep(newHistory.length - 1);
+  };
+
+  const undo = () => {
+    if (currentStep > 0) {
+      const newStep = currentStep - 1;
+      setCurrentStep(newStep);
+      const img = new Image();
+      img.src = history[newStep];
+      img.onload = () => {
+        if (context && canvasRef.current) {
+          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          context.drawImage(img, 0, 0);
+        }
+      };
+    }
+  };
+
+  const redo = () => {
+    if (currentStep < history.length - 1) {
+      const newStep = currentStep + 1;
+      setCurrentStep(newStep);
+      const img = new Image();
+      img.src = history[newStep];
+      img.onload = () => {
+        if (context && canvasRef.current) {
+          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+          context.drawImage(img, 0, 0);
+        }
+      };
+    }
+  };
 
   const drawGuidelines = () => {
     const guidelineCanvas = guidelineCanvasRef.current;
@@ -55,8 +96,8 @@ function App() {
 
     const centerX = Math.floor(guidelineCanvas.width / 2);
     const centerY = Math.floor(guidelineCanvas.height / 2);
-    const maxLength = Math.max(guidelineCanvas.width, guidelineCanvas.height) * 2;
-
+    const radius = Math.min(centerX, centerY) * 0.9;
+    
     switch (activeLayout.type) {
       case 'radial':
         for (let i = 0; i < activeLayout.segments; i++) {
@@ -64,29 +105,76 @@ function App() {
           ctx.beginPath();
           ctx.moveTo(centerX, centerY);
           ctx.lineTo(
-            centerX + Math.cos(angle) * maxLength,
-            centerY + Math.sin(angle) * maxLength
+            centerX + Math.cos(angle) * radius * 2,
+            centerY + Math.sin(angle) * radius * 2
           );
           ctx.stroke();
         }
         break;
 
-      case 'kaleidoscope':
-        for (let i = 0; i < activeLayout.segments; i++) {
-          const angle = (Math.PI * i) / activeLayout.segments;
+      case 'kaleidoscope': {
+        // Calculate hexagon dimensions
+        const hexRadius = radius / 4; // Smaller hexagons for more density
+        const hexHeight = hexRadius * Math.sqrt(3);
+        
+        // Function to draw a single hexagon with its segments
+        const drawHexagonWithSegments = (centerHexX: number, centerHexY: number) => {
+          // Draw hexagon outline
           ctx.beginPath();
-          ctx.moveTo(centerX, centerY);
-          ctx.lineTo(
-            centerX + Math.cos(angle) * maxLength,
-            centerY + Math.sin(angle) * maxLength
-          );
+          for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const x = centerHexX + hexRadius * Math.cos(angle);
+            const y = centerHexY + hexRadius * Math.sin(angle);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
           ctx.stroke();
+
+          // Draw internal segments
+          for (let i = 0; i < activeLayout.segments; i++) {
+            const angle = (2 * Math.PI * i) / activeLayout.segments;
+            ctx.beginPath();
+            ctx.moveTo(centerHexX, centerHexY);
+            ctx.lineTo(
+              centerHexX + Math.cos(angle) * hexRadius,
+              centerHexY + Math.sin(angle) * hexRadius
+            );
+            ctx.stroke();
+          }
+        };
+
+        // Draw center hexagon
+        drawHexagonWithSegments(centerX, centerY);
+
+        // Draw surrounding hexagons in rings
+        for (let ring = 1; ring <= 3; ring++) {
+          for (let i = 0; i < 6; i++) {
+            const ringAngle = (Math.PI / 3) * i;
+            
+            // For each position in the ring, draw hexagons
+            for (let j = 0; j < ring; j++) {
+              // Calculate positions for each hexagon in the ring
+              const offset = j * (hexHeight * 1.75);
+              const ringRadius = hexHeight * 1.75 * ring;
+              const baseX = centerX + (ringRadius - offset) * Math.cos(ringAngle);
+              const baseY = centerY + (ringRadius - offset) * Math.sin(ringAngle);
+              
+              // Draw the hexagon at this position
+              drawHexagonWithSegments(baseX, baseY);
+              
+              // Draw additional hexagons to fill gaps
+              if (j < ring - 1) {
+                const nextAngle = (Math.PI / 3) * ((i + 1) % 6);
+                const interX = baseX + hexHeight * 1.75 * Math.cos(nextAngle);
+                const interY = baseY + hexHeight * 1.75 * Math.sin(nextAngle);
+                drawHexagonWithSegments(interX, interY);
+              }
+            }
+          }
         }
-        ctx.beginPath();
-        ctx.moveTo(0, centerY);
-        ctx.lineTo(guidelineCanvas.width, centerY);
-        ctx.stroke();
         break;
+      }
 
       case 'vertical':
         ctx.beginPath();
@@ -145,6 +233,10 @@ function App() {
       // Set white background
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, width, height);
+
+      // Initialize history with blank canvas
+      setHistory([canvasRef.current.toDataURL()]);
+      setCurrentStep(0);
     }
 
     // Update guidelines
@@ -204,13 +296,17 @@ function App() {
     y2: number,
     centerX: number,
     centerY: number,
-    angle: number
+    angle: number,
+    hexCenter?: { x: number; y: number }
   ) => {
+    const actualCenterX = hexCenter ? hexCenter.x : centerX;
+    const actualCenterY = hexCenter ? hexCenter.y : centerY;
+
     ctx.beginPath();
-    const rotatedX1 = centerX + (x1 - centerX) * Math.cos(angle) - (y1 - centerY) * Math.sin(angle);
-    const rotatedY1 = centerY + (x1 - centerX) * Math.sin(angle) + (y1 - centerY) * Math.cos(angle);
-    const rotatedX2 = centerX + (x2 - centerX) * Math.cos(angle) - (y2 - centerY) * Math.sin(angle);
-    const rotatedY2 = centerY + (x2 - centerX) * Math.sin(angle) + (y2 - centerY) * Math.cos(angle);
+    const rotatedX1 = actualCenterX + (x1 - actualCenterX) * Math.cos(angle) - (y1 - actualCenterY) * Math.sin(angle);
+    const rotatedY1 = actualCenterY + (x1 - actualCenterX) * Math.sin(angle) + (y1 - actualCenterY) * Math.cos(angle);
+    const rotatedX2 = actualCenterX + (x2 - actualCenterX) * Math.cos(angle) - (y2 - actualCenterY) * Math.sin(angle);
+    const rotatedY2 = actualCenterY + (x2 - actualCenterX) * Math.sin(angle) + (y2 - actualCenterY) * Math.cos(angle);
     ctx.moveTo(Math.floor(rotatedX1), Math.floor(rotatedY1));
     ctx.lineTo(Math.floor(rotatedX2), Math.floor(rotatedY2));
     ctx.stroke();
@@ -224,12 +320,9 @@ function App() {
     const coords = getCanvasCoordinates(e);
     const centerX = Math.floor(canvasRef.current.width / 2);
     const centerY = Math.floor(canvasRef.current.height / 2);
-
-    // Draw the main line
-    context.beginPath();
-    context.moveTo(lastX, lastY);
-    context.lineTo(coords.x, coords.y);
-    context.stroke();
+    const radius = Math.min(centerX, centerY) * 0.9;
+    const hexRadius = radius / 4;
+    const hexHeight = hexRadius * Math.sqrt(3);
 
     switch (activeLayout.type) {
       case 'radial':
@@ -239,13 +332,65 @@ function App() {
         }
         break;
 
-      case 'kaleidoscope':
+      case 'kaleidoscope': {
+        // Draw in center hexagon
         for (let i = 0; i < activeLayout.segments; i++) {
-          const angle = (Math.PI * i) / activeLayout.segments;
+          const angle = (2 * Math.PI * i) / activeLayout.segments;
           drawMirroredLine(context, lastX, lastY, coords.x, coords.y, centerX, centerY, angle);
-          drawMirroredLine(context, 2 * centerX - lastX, lastY, 2 * centerX - coords.x, coords.y, centerX, centerY, angle);
+        }
+
+        // Draw in surrounding hexagons
+        for (let ring = 1; ring <= 3; ring++) {
+          for (let i = 0; i < 6; i++) {
+            const ringAngle = (Math.PI / 3) * i;
+            
+            for (let j = 0; j < ring; j++) {
+              const offset = j * (hexHeight * 1.75);
+              const ringRadius = hexHeight * 1.75 * ring;
+              const hexCenterX = centerX + (ringRadius - offset) * Math.cos(ringAngle);
+              const hexCenterY = centerY + (ringRadius - offset) * Math.sin(ringAngle);
+
+              for (let k = 0; k < activeLayout.segments; k++) {
+                const segmentAngle = (2 * Math.PI * k) / activeLayout.segments;
+                drawMirroredLine(
+                  context,
+                  lastX,
+                  lastY,
+                  coords.x,
+                  coords.y,
+                  centerX,
+                  centerY,
+                  segmentAngle,
+                  { x: hexCenterX, y: hexCenterY }
+                );
+              }
+
+              // Draw in intermediate hexagons
+              if (j < ring - 1) {
+                const nextAngle = (Math.PI / 3) * ((i + 1) % 6);
+                const interX = hexCenterX + hexHeight * 1.75 * Math.cos(nextAngle);
+                const interY = hexCenterY + hexHeight * 1.75 * Math.sin(nextAngle);
+                
+                for (let k = 0; k < activeLayout.segments; k++) {
+                  const segmentAngle = (2 * Math.PI * k) / activeLayout.segments;
+                  drawMirroredLine(
+                    context,
+                    lastX,
+                    lastY,
+                    coords.x,
+                    coords.y,
+                    centerX,
+                    centerY,
+                    segmentAngle,
+                    { x: interX, y: interY }
+                  );
+                }
+              }
+            }
+          }
         }
         break;
+      }
 
       case 'vertical':
         context.beginPath();
@@ -267,7 +412,10 @@ function App() {
   };
 
   const stopDrawing = () => {
-    setIsDrawing(false);
+    if (isDrawing) {
+      setIsDrawing(false);
+      saveToHistory();
+    }
   };
 
   const downloadCanvas = () => {
@@ -283,6 +431,7 @@ function App() {
     if (context && canvasRef.current) {
       context.fillStyle = 'white';
       context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      saveToHistory();
     }
   };
 
@@ -335,6 +484,30 @@ function App() {
                   />
                   <Plus className="text-gray-600 w-4 h-4" />
                 </div>
+                <button
+                  onClick={undo}
+                  disabled={currentStep <= 0}
+                  className={`flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 rounded ${
+                    currentStep <= 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-500 text-white hover:bg-gray-600'
+                  }`}
+                >
+                  <Undo2 size={16} className="sm:w-5 sm:h-5" />
+                  <span>Undo</span>
+                </button>
+                <button
+                  onClick={redo}
+                  disabled={currentStep >= history.length - 1}
+                  className={`flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 rounded ${
+                    currentStep >= history.length - 1
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gray-500 text-white hover:bg-gray-600'
+                  }`}
+                >
+                  <Redo2 size={16} className="sm:w-5 sm:h-5" />
+                  <span>Redo</span>
+                </button>
                 <button
                   onClick={clearCanvas}
                   className="flex items-center space-x-1 px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 text-white rounded hover:bg-red-600"
